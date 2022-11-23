@@ -1,9 +1,11 @@
-import pyAesCrypt as pac
-from pathlib import Path
 import argparse
 import logging
-from settings import MIN_PASSWORD_LEN, BUFFER_SIZE
 import os
+from pathlib import Path
+
+import pyAesCrypt as pac
+
+from settings import MIN_PASSWORD_LEN, BUFFER_SIZE, PASSWORD
 
 
 def encrypt_file(file_path: Path, password: str, ignor_error=True):
@@ -41,7 +43,7 @@ def decrypt_file():
     pass
 
 
-def dirs_travel(path_to_dir, password):
+def dirs_travel_encrypt(path_to_dir, password):
     files_struct = []
     for root, dirs, files in os.walk(path_to_dir):
         for file in files:
@@ -53,8 +55,27 @@ def dirs_travel(path_to_dir, password):
 
 
 if __name__ == "__main__":
-    path = Path('/home/serg/PycharmProjects/py_programs/programs_1/file_crypt/test')
-    dirs_travel(path, '1234567')
+    parser = argparse.ArgumentParser(description='File encryption and decryption service')
+
+    parser.add_argument('--path', type=str, required=False, help='The path to the folder to be encrypted')
+    parser.add_argument('--password', type=str, required=False, help='The password for encrypt')
+    _args = parser.parse_args()
+
+    if _args.path:
+        path = Path(_args.path)
+
+        if path.is_dir():
+            dirs_travel_encrypt(
+                path.as_posix(),
+                _args.password if hasattr(_args, "password") else PASSWORD
+            )
+
+        if path.is_file():
+            encrypt_file(
+                path.as_posix(),
+                _args.password if hasattr(_args, "password") else PASSWORD
+            )
+
 
 
 
