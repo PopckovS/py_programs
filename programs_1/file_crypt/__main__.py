@@ -34,7 +34,6 @@ def encrypt_file(
     if not isinstance(file_path, Path):
         file_path = Path(file_path)
 
-    # encrypt file
     new_path = file_path.as_posix().with_suffix(extension)
     pac.encryptFile(file_path,
                     new_path,
@@ -43,8 +42,32 @@ def encrypt_file(
     return Path(new_path)
 
 
-def decrypt_file():
-    pass
+def decrypt_file(file_path: Union[Path, str], password: str) -> Path:
+    """
+     Decrypt file with password
+
+    :param file_path:
+    :param password:
+    :return:
+    """
+
+    if not isinstance(password, str) or len(password) < MIN_PASSWORD_LEN:
+        logging.error("Password not not valid or too short. Min password %s", MIN_PASSWORD_LEN)
+        return
+
+    if not isinstance(file_path, (Path, str)):
+        logging.error("File path not valid")
+        return
+
+    if not isinstance(file_path, Path):
+        file_path = Path(file_path)
+
+    new_path = file_path.as_posix().with_suffix(extension)
+    pac.decryptFile(file_path,
+                    new_path,
+                    password,
+                    BUFFER_SIZE)
+    return Path(new_path)
 
 
 def dirs_travel_encrypt(path_to_dir: Union[Path, str], password: str) -> list:
