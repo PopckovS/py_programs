@@ -9,18 +9,15 @@ from settings import MIN_PASSWORD_LEN, BUFFER_SIZE, PASSWORD, EXTENSION
 from typing import Union
 
 
-def encrypt_file(
-        file_path: Union[Path, str],
-        password: str,
-        extension: str,
-        ignor_error: bool = True) -> Path:
+def encrypt_file(file_path: Union[Path, str],
+                 password: str,
+                 ex: str) -> Path:
     """
     Encrypt file with password
 
     :param file_path: path to the file
     :param password: password for encrypt file
-    :param extension: file extension for encrypt
-    :param ignor_error: ignor error or not
+    :param ex: file extension for encrypt
     :return:
     """
     if not isinstance(password, str) or len(password) < MIN_PASSWORD_LEN:
@@ -34,7 +31,7 @@ def encrypt_file(
     if not isinstance(file_path, Path):
         file_path = Path(file_path)
 
-    new_path = file_path.as_posix().with_suffix(extension)
+    new_path = file_path.as_posix().with_suffix(ex)
     pac.encryptFile(file_path,
                     new_path,
                     password,
@@ -42,12 +39,15 @@ def encrypt_file(
     return Path(new_path)
 
 
-def decrypt_file(file_path: Union[Path, str], password: str) -> Path:
+def decrypt_file(file_path: Union[Path, str],
+                 password: str,
+                 ex: str) -> Path:
     """
      Decrypt file with password
 
     :param file_path:
     :param password:
+    :param ex:
     :return:
     """
 
@@ -62,7 +62,7 @@ def decrypt_file(file_path: Union[Path, str], password: str) -> Path:
     if not isinstance(file_path, Path):
         file_path = Path(file_path)
 
-    new_path = file_path.as_posix().with_suffix(extension)
+    new_path = file_path.as_posix().with_suffix(ex)
     pac.decryptFile(file_path,
                     new_path,
                     password,
@@ -70,7 +70,11 @@ def decrypt_file(file_path: Union[Path, str], password: str) -> Path:
     return Path(new_path)
 
 
-def dirs_travel_encrypt(path_to_dir: Union[Path, str], password: str) -> list:
+# TODO path_to_output
+def dirs_travel_encrypt(path_to_dir: Union[Path, str],
+                        path_to_output: Union[Path, str],
+                        password: str
+                        ) -> list:
     """
     Walk through directory and encrypts all inner file
 
@@ -88,32 +92,52 @@ def dirs_travel_encrypt(path_to_dir: Union[Path, str], password: str) -> list:
     pass
 
 
-def get_args() -> argparse:
+def get_args() -> tuple:
     """
     Returned parameter of terminal arguments
 
-    :return: argparse object
+    :return: tuple of path, password, extension
     """
     parser = argparse.ArgumentParser(description='File encryption and decryption service')
 
     parser.add_argument('-ex', type=str, required=False, help='Extension for encrypt file')
     parser.add_argument('-password', type=str, required=False, help='The password for encrypt')
     parser.add_argument('-path', type=str, required=False, help='The path to the folder to be encrypted')
-    return parser.parse_args()
+
+    args = parser.parse_args()
+    return args.path, \
+           args.password if args.password is not None else PASSWORD, \
+           args.ex if args.ex is not None else EXTENSION
+
+
+def args_validate(path: Path, password: str, ex: str) -> tuple:
+    if path:
+        path = Path(path)
+        if not any([path.is_dir(), path.is_file()]):
+            logging.error('Path is not a file or directions')
+            raise Exception
+
+    if not password:
+        logging.error('Please use password')
+        raise Exception
+
+    # TODO ex validate
+
+    return path, password, ex
+
+
+def start(path, password, ex):
+
+    if path.is_dir():
+        dirs_travel_encrypt(
+            path.as_posix(), password, ex)
+
+    if path.is_file():
+        encrypt_file(
+            path.as_posix(), password, ex)
 
 
 if __name__ == "__main__":
-    _args = get_args()
-
-    if _args.path:
-        path = Path(_args.path)
-        extension = _args.ex if hasattr(_args, "ex") else EXTENSION
-        password = _args.password if hasattr(_args, "password") else PASSWORD
-
-        if path.is_dir():
-            dirs_travel_encrypt(
-                path.as_posix(), password, extension)
-
-        if path.is_file():
-            encrypt_file(
-                path.as_posix(), password, extension)
+    args = get_args()
+    args = args_validate(*args)
+    start(*args)
