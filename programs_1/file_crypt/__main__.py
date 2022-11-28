@@ -9,135 +9,136 @@ from settings import MIN_PASSWORD_LEN, BUFFER_SIZE, PASSWORD, EXTENSION
 from typing import Union
 
 
-def encrypt_file(file_path: Union[Path, str],
-                 password: str,
-                 ex: str) -> Path:
-    """
-    Encrypt file with password
+class Crypt(object):
 
-    :param file_path: path to the file
-    :param password: password for encrypt file
-    :param ex: file extension for encrypt
-    :return:
-    """
-    if not isinstance(password, str) or len(password) < MIN_PASSWORD_LEN:
-        logging.error("Password not not valid or too short. Min password %s", MIN_PASSWORD_LEN)
-        return
+    sources = None
+    is_dir = False
+    is_file = False
 
-    if not isinstance(file_path, (Path, str)):
-        logging.error("File path not valid")
-        return
+    def __init__(self, path, password, delete=True):
+        self.path = path
+        self.delete = delete
+        self.password = password
 
-    if not isinstance(file_path, Path):
-        file_path = Path(file_path)
+    def do_crypt(self, path_to_output=None) -> None:
+        self._start(
+            self._encrypt_file,
+            path_to_output
+        )
 
-    new_path = file_path.as_posix().with_suffix(ex)
-    pac.encryptFile(file_path,
-                    new_path,
-                    password,
-                    BUFFER_SIZE)
-    return Path(new_path)
+    def do_decrypt(self, path_to_output=None) -> None:
+        self._start(
+            self._decrypt_file,
+            path_to_output
+        )
 
+    def _start(self, method, path_to_output: str = None) -> None:
+        if self.is_file:
+            self.sources = self.method(self.path, self.path)
+        elif self.is_dir:
+            self.sources = self._dirs_travel(method, self.path, self.path)
 
-def decrypt_file(file_path: Union[Path, str],
-                 password: str,
-                 ex: str) -> Path:
-    """
-     Decrypt file with password
+    def _dirs_travel(self, method, path: Path, path_to_output: Path) -> list:
+        """
+        Walk through directory and encrypts all inner file
 
-    :param file_path:
-    :param password:
-    :param ex:
-    :return:
-    """
+        :param path_to_dir:
+        :param path_to_output:
+        :return: list of path to encrypt file
+        """
+        sources = []
+        for root, dirs, files in os.walk(path):
+            for file in files:
+                file_path = Path(root) / file
+                new_path = method(
+                    file_path.absolute(),
+                    file_path.absolute()
+                )
+                sources.append(new_path)
+        return sources
 
-    if not isinstance(password, str) or len(password) < MIN_PASSWORD_LEN:
-        logging.error("Password not not valid or too short. Min password %s", MIN_PASSWORD_LEN)
-        return
+    def _encrypt_file(self, file_path: str, path_to_output: str) -> Path:
+        """
+        Encrypt file with password
 
-    if not isinstance(file_path, (Path, str)):
-        logging.error("File path not valid")
-        return
+        :param file_path: path to the file
+        :param path_to_output: path to output encrypt file
+        :return: Path to output file
+        """
+        pac.encryptFile(file_path,
+                        path_to_output.with_suffix(EXTENSION),
+                        self.password,
+                        BUFFER_SIZE)
+        if self.delete:
+            os.unlink(file_path)
+        return Path(path_to_output)
 
-    if not isinstance(file_path, Path):
-        file_path = Path(file_path)
+    def _decrypt_file(self, file_path: str, path_to_output: str) -> Path:
+        """
+        Decrypt file
 
-    new_path = file_path.as_posix().with_suffix(ex)
-    pac.decryptFile(file_path,
-                    new_path,
-                    password,
-                    BUFFER_SIZE)
-    return Path(new_path)
+        :param file_path: path to the file
+        :param path_to_output: path to output decrypt file
+        :return: Path to output file
+        """
+        pac.decryptFile(file_path,
+                        path_to_output.with_suffix(''),
+                        self.password,
+                        BUFFER_SIZE)
+        return Path(path_to_output)
 
+    def _check_path(self, path):
+        if path and isinstance(path, str):
+            path = Path(path)
+            if any([path.is_dir(), path.is_file()]):
+                return path
+        raise Exception("Path is not a file or directions")
 
-# TODO path_to_output
-def dirs_travel_encrypt(path_to_dir: Union[Path, str],
-                        path_to_output: Union[Path, str],
-                        password: str
-                        ) -> list:
-    """
-    Walk through directory and encrypts all inner file
+    def _check_password(self, password):
+        if password and isinstance(password, (str, int)):
+            password = str(password)
+            if len(password) >= MIN_PASSWORD_LEN:
+                return password
+        raise Exception("Password is not valid, min password %s" % MIN_PASSWORD_LEN)
 
-    :param path_to_dir:
-    :param password:
-    :return: list of path to encrypt file
-    """
-    files_struct = []
-    for root, dirs, files in os.walk(path_to_dir):
-        for file in files:
-            file_path = Path(root) / file
-            files_struct.append(
-                encrypt_file(file_path.as_posix(), password)
-            )
-    pass
+    def get_path(self):
+        return self._path
+
+    def set_path(self, path):
+        self._path = self._check_path(path)
+        self.is_dir = True if self._path.is_dir() else False
+        self.is_file = True if self._path.is_file() else False
+
+    def get_password(self):
+        return self._password
+
+    def set_password(self, password):
+        self._password = self._check_password(password)
+
+    path = property(get_path, set_path)
+    password = property(get_password, set_password)
 
 
 def get_args() -> tuple:
     """
     Returned parameter of terminal arguments
 
-    :return: tuple of path, password, extension
+    :return: tuple of path, password
     """
     parser = argparse.ArgumentParser(description='File encryption and decryption service')
 
-    parser.add_argument('-ex', type=str, required=False, help='Extension for encrypt file')
+    parser.add_argument('--run', type=str, required=False, help='Run task from file')
     parser.add_argument('-password', type=str, required=False, help='The password for encrypt')
     parser.add_argument('-path', type=str, required=False, help='The path to the folder to be encrypted')
+    parser.add_argument('-output', type=str, required=False, help='The path to save encrypt file')
 
     args = parser.parse_args()
     return args.path, \
-           args.password if args.password is not None else PASSWORD, \
-           args.ex if args.ex is not None else EXTENSION
-
-
-def args_validate(path: Path, password: str, ex: str) -> tuple:
-    if path:
-        path = Path(path)
-        if not any([path.is_dir(), path.is_file()]):
-            logging.error('Path is not a file or directions')
-            raise Exception
-
-    if not password:
-        logging.error('Please use password')
-        raise Exception
-
-    # TODO ex validate
-
-    return path, password, ex
-
-
-def start(path, password, ex):
-
-    if path.is_dir():
-        dirs_travel_encrypt(
-            path.as_posix(), password, ex)
-
-    if path.is_file():
-        encrypt_file(
-            path.as_posix(), password, ex)
+           args.password if args.password is not None else PASSWORD
 
 
 if __name__ == "__main__":
-    args = get_args()
-    args = args_validate(*args)
-    start(*args)
+    path, password = get_args()
+    crypt = Crypt(path, password, True)
+    # crypt.do_crypt()
+    crypt.do_decrypt()
