@@ -10,4 +10,4 @@ BUFFER_SIZE = environ.get("BUFFER_SIZE", (512 * 1024))
 """password for encrypt"""
 PASSWORD = environ.get("PASSWORD", None)
 """extension for encrypt file"""
-EXTENSION = environ.get("EXTENSION", '.aes')
+CRYPT_EXTENSION = environ.get("CRYPT_EXTENSION", '.aes')
