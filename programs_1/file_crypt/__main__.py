@@ -1,11 +1,10 @@
 import argparse
 import os
 from pathlib import Path
-import magic
+
 import pyAesCrypt as pac
 
 from settings import MIN_PASSWORD_LEN, BUFFER_SIZE, PASSWORD, CRYPT_EXTENSION
-from typing import Union
 
 
 def _check_path(path: str) -> Path:
@@ -33,7 +32,7 @@ def _check_path_out(path_out: str):
 def encrypt_file(path: str, path_out: str, password: str, delete: bool = True):
     path = _check_path(path)
     password = _check_password(password)
-    path_out = _check_path_out(path_out)
+    path_out = _check_path_out(path_out) if path_out else path
 
     return _encrypt_file(
         path, path_out, password, delete)
@@ -81,16 +80,6 @@ def _decrypt_file(file_path: Path,
                     BUFFER_SIZE)
     if delete:
         file_path.unlink()
-
-    _extension = None
-    mime = magic.Magic(mime=True)
-    type = mime.from_file(new_file)
-    if type == "text/plain":
-        _extension = ".txt"
-
-    if _extension:
-        new_file.rename(new_file.with_suffix(_extension))
-
     return new_file
 
 
