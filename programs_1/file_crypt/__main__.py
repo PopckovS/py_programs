@@ -23,10 +23,10 @@ def _check_password(password: str) -> Path:
     raise Exception("Password is not valid, min password %s" % MIN_PASSWORD_LEN)
 
 
-def _check_path_out(path_out: str):
-    if isinstance(path_out, (Path, str)):
-        return Path(path_out)
-    raise Exception('Path `%s` is not a str for output file' % path_out.absolute())
+def _check_path_out(output: str):
+    if isinstance(output, (Path, str)):
+        return Path(output)
+    raise Exception('Path `%s` is not a str for output file' % output.absolute())
 
 
 def encrypt_file(path: str, path_out: str, password: str, delete: bool = True):
@@ -39,9 +39,9 @@ def encrypt_file(path: str, path_out: str, password: str, delete: bool = True):
 
 
 def decrypt_file(path: str, path_out: str, password: str, delete: bool = True):
-    path = Path(path)  # todo
+    path = _check_path(path)
     password = _check_password(password)
-    path_out = _check_path_out(path_out)
+    path_out = _check_path_out(path_out) if path_out else path
 
     return _decrypt_file(
         path, path_out, password, delete)
@@ -55,9 +55,9 @@ def _encrypt_file(file_path: Path,
     """
     Encrypt file with password
     """
-    new_file = path_out.with_suffix(CRYPT_EXTENSION)
+    new_file = path_out.with_suffix(path_out.suffix + CRYPT_EXTENSION)
     pac.encryptFile(file_path.absolute(),
-                    new_file,
+                    new_file.absolute(),
                     password,
                     BUFFER_SIZE)
     if delete:
@@ -85,44 +85,48 @@ def _decrypt_file(file_path: Path,
 
 def _dirs_travel(method,
                  path: Path,
-                 path_to_output: Path,
+                 output: Path,
                  password: str,
                  delete: bool = True
                  ) -> list:
     """
     Walk through directory and encrypts all inner file
     """
+    if path is not output:
+        output.mkdir(exist_ok=True)
+
     sources = []
     for root, dirs, files in os.walk(path):
         for file in files:
             file_path = Path(root) / file
+            file_outpath = Path(root) / file
             new_path = method(file_path.absolute(),
-                              path_to_output.absolute(),
+                              file_outpath.absolute(),
                               password,
                               delete
                               )
             sources.append(new_path)
-    if delete:
+    if delete and path is not output:
         path.unlink()
     return sources
 
 
-def crypt_dir(path: str, path_to_output: str, password: str, delete: bool = None):
+def encrypt_dir(path: str, output: str, password: str, delete: bool = True):
     path = _check_path(path)
     password = _check_password(password)
-    path_to_output = _check_path_out(path_to_output)
+    output = _check_path_out(output) if output else path
 
-    _dirs_travel(
-        encrypt_file, path, path_to_output, password, delete)
+    return _dirs_travel(
+        _encrypt_file, path, output, password, delete)
 
 
-def decrypt_dir(path: str, path_to_output: str, password: str, delete: bool = None):
+def decrypt_dir(path: str, output: str, password: str, delete: bool = True):
     path = _check_path(path)
     password = _check_password(password)
-    path_to_output = _check_path_out(path_to_output)
+    output = _check_path_out(output) if output else path
 
-    _dirs_travel(
-        decrypt_file, path, path_to_output, password, delete)
+    return _dirs_travel(
+        _decrypt_file, path, output, password, delete)
 
 
 def get_args() -> tuple:
@@ -147,5 +151,8 @@ def get_args() -> tuple:
 if __name__ == "__main__":
     path, output, password = get_args()
 
-    new_file = encrypt_file(path, output, password)
-    new_output = decrypt_file(new_file, output, password)
+    # new_file = encrypt_file(path, output, password)
+    # new_output = decrypt_file(new_file, output, password)
+
+    new_file = encrypt_dir(path, output, password)
+    new_file = decrypt_dir(path, output, password)
