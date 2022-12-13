@@ -1,5 +1,6 @@
 import argparse
 import os
+import shutil
 import zipfile
 from pathlib import Path
 from typing import Optional, Tuple
@@ -28,7 +29,9 @@ def _check_password(password: str) -> Path:
 
 def _check_path_out(output: str):
     if isinstance(output, (Path, str)):
-        return Path(output)
+        output = Path(output)
+        if output.is_dir():
+            return output
     raise Exception('Path `%s` is not a str for output file' % output.absolute())
 
 
@@ -78,8 +81,9 @@ def _decrypt_file(file_path: Path, path_to_output: Path, password: str, delete: 
     return new_file
 
 
-def _dirs_travel(method, path: Path,
-                 output: Path,
+def _dirs_travel(method,
+                 path: Path,
+                 output_dir: Path,
                  password: str,
                  to_zip: bool = False,
                  delete: bool = True
@@ -87,17 +91,13 @@ def _dirs_travel(method, path: Path,
     """
     Walk through directory and encrypts all inner file
     """
-    if path is not output:
-        output.mkdir(exist_ok=True)
-
-    # crypt all files in dir
     sources = []
     for root, dirs, files in os.walk(path):
         for file in files:
             file_path = Path(root) / file
             file_outpath = Path(root) / file
-            new_path = method(file_path.absolute(),
-                              file_outpath.absolute(),
+            new_path = method(file_path,
+                              file_outpath,
                               password,
                               delete
                               )
@@ -105,56 +105,60 @@ def _dirs_travel(method, path: Path,
 
     # dir in zip
     if to_zip:
-        output = create_zip(path.name, sources)
+        old_path = path
+        path = create_zip(path, sources)
+        if delete:
+            shutil.rmtree(old_path)
 
     # move dir
-    if delete and path is not output:
-        move(path, output)
+    if str(path.parent) is not str(output_dir):
+        output_dir.mkdir(exist_ok=True)
+        move(str(path.absolute()), str(output_dir.absolute()))
 
-    return output
+    return output_dir / path.name
 
 
-def encrypt_dir(path: str, output: str, password: str, to_zip: bool = False, delete: bool = True):
+def encrypt_dir(path: str, output_dir: str, password: str, to_zip: bool = False, delete: bool = True):
     """
     Crypt all files in dir
     """
     path = _check_path(path)
     password = _check_password(password)
-    output = _check_path_out(output) if output else path
+    output_dir = _check_path_out(output_dir) if output_dir else path.parent
 
     crypt_files = _dirs_travel(
-        _encrypt_file, path, output, password, to_zip, delete)
+        _encrypt_file, path, output_dir, password, to_zip, delete)
     return crypt_files
 
 
-def decrypt_dir(path: str, output: str, password: str, to_zip: bool = False, delete: bool = True):
+def decrypt_dir(path: str, output_dir: str, password: str, to_zip: bool = False, delete: bool = True):
     """
     Decrypt all files in dir
     """
     path = _check_path(path)
     password = _check_password(password)
-    output = _check_path_out(output) if output else path
+    output = _check_path_out(output_dir) if output_dir else path
 
     return _dirs_travel(
-        _decrypt_file, path, output, password, to_zip, delete)
+        _decrypt_file, path, output_dir, password, to_zip, delete)
 
 
-def create_zip(name: str = None, files: list = None) -> str:
+def create_zip(path: str = None, files: list = None) -> str:
     """
     Create zip archive and save to the path
 
-    :param str name: name for zip
+    :param str zip_name: name for zip
     :param str files: path to source
     :return: None или tuple объект, путь и название файла.
     """
     try:
         assert files, "Have not data for create zip."
 
-        path_to_zip = Path(r'%s.zip' % name)
+        path_to_zip = Path(r'%s.zip' % path.name)
 
         new_zip = zipfile.ZipFile(path_to_zip, 'w')
         for file in files:
-            new_zip.write(filename=file, arcname=file.as_posix())
+            new_zip.write(filename=file, arcname=file)
         new_zip.close()
     except Exception as e:
         raise e
@@ -183,10 +187,14 @@ def get_args() -> tuple:
 
 
 if __name__ == "__main__":
-    path, zip, output, password = get_args()
+    path, zip, output_dir, password = get_args()
 
     # new_file = encrypt_file(path, output, password)
     # new_output = decrypt_file(new_file, output, password)
 
-    new_file = encrypt_dir(path, output, password, zip)
-    new_file = decrypt_dir(path, output, password, zip)
+    zip = True
+    path = 'test'
+    output_dir = '/home/serg/PycharmProjects/py_programs/programs_1/file_crypt/output'
+
+    new_file = encrypt_dir(path, output_dir, password, zip)
+    new_file = decrypt_dir(path, output_dir, password, zip)
